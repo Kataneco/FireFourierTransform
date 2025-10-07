@@ -1,0 +1,67 @@
+#version 460
+
+layout (local_size_x = 16, local_size_y = 16, local_size_x = 1) in;
+layout (set = 0, binding = 0, rgba32f) uniform image2D renderTexture;
+
+layout (std140, set = 0, binding = 1) readonly buffer SpectrumBuffer {
+    vec4 spectrum[];
+} spectrumBuffer;
+
+float key(float frequency) {
+    return 12 * log2(frequency / 440.0) + 49;
+}
+
+float key_in_octave(float frequency) {
+    const float key_number = key(frequency);
+    return floor(key_number - int(key_number / 12.0) * 12);
+}
+
+vec3 hue2rgb(float hue) {
+    hue = fract(hue); // Simulating fract function in GLSL
+    return pow(vec3(abs(hue * 6.0 - 3.0) - 1.0, 2.0 - abs(hue * 6.0 - 2.0), 2.0 - abs(hue * 6.0 - 4.0)), vec3(1.0/1.0));
+}
+
+void main() {
+    const float x = pow(10.0, 1.30103+float(gl_GlobalInvocationID.x) / 1000.0);
+    const float y = gl_GlobalInvocationID.y;
+
+    //vec4 color = imageLoad(renderTexture, ivec2(gl_GlobalInvocationID.x, y));
+    //imageStore(renderTexture, ivec2(gl_GlobalInvocationID.x, y), vec4(color.xyz, 1));
+
+    imageStore(renderTexture, ivec2(gl_GlobalInvocationID.x, y), vec4(vec3(0.0), 0.6));
+
+    int index = int(x);
+
+    float lxy = length(spectrumBuffer.spectrum[int(index)].xy) * log2(x);
+    float lzw = length(spectrumBuffer.spectrum[int(index)].zw) * log2(x);
+
+    if(x > 1000) {
+        for(int i = 1; i <= 2; ++i) {
+            lxy = max(lxy, length(spectrumBuffer.spectrum[int(index+i)].xy) * log2(x));
+            lzw = max(lzw, length(spectrumBuffer.spectrum[int(index+i)].zw) * log2(x));
+        }
+    } else if(x > 2000) {
+        for(int i = -2; i <= 2; ++i) {
+            lxy = max(lxy, length(spectrumBuffer.spectrum[int(index+i)].xy) * log2(x));
+            lzw = max(lzw, length(spectrumBuffer.spectrum[int(index+i)].zw) * log2(x));
+        }
+    } else if(x > 4000) {
+        for(int i = -3; i <= 3; ++i) {
+            lxy = max(lxy, length(spectrumBuffer.spectrum[int(index+i)].xy) * log2(x));
+            lzw = max(lzw, length(spectrumBuffer.spectrum[int(index+i)].zw) * log2(x));
+        }
+    } else if(x > 8000) {
+        for(int i = -5; i <= 5; ++i) {
+            lxy = max(lxy, length(spectrumBuffer.spectrum[int(index+i)].xy) * log2(x));
+            lzw = max(lzw, length(spectrumBuffer.spectrum[int(index+i)].zw) * log2(x));
+        }
+    }
+
+    if ((912-y) < lxy-6) imageStore(renderTexture, ivec2(gl_GlobalInvocationID.x, y), vec4(hue2rgb(log2(x))*log(lxy/15)+0*vec3(spectrumBuffer.spectrum[int(index)].xy, 0.42), 1.0));
+    if ((y) < lzw-6) imageStore(renderTexture, ivec2(gl_GlobalInvocationID.x, y), vec4(hue2rgb(log2(x))*log(lzw/15)+0*vec3(spectrumBuffer.spectrum[int(index)].zw, 0.42), 1.0));
+
+    vec2 wav = spectrumBuffer.spectrum[int(gl_GlobalInvocationID.x/2.0)+882].xz;
+    float ny = 4.0*(y/912.0-0.5);
+    if(distance(ny, wav.x) < 0.005) imageStore(renderTexture, ivec2(gl_GlobalInvocationID.x, y), vec4(0, .8, 1, 1));
+    if(distance(ny, wav.y) < 0.005) imageStore(renderTexture, ivec2(gl_GlobalInvocationID.x, y), vec4(1, .2, 0, 1));
+}
