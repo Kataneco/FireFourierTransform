@@ -328,7 +328,7 @@ void Desu::init() {
 
     VkDescriptorBufferInfo descriptorBufferInfo{};
     descriptorBufferInfo.offset = 0;
-    descriptorBufferInfo.range = static_cast<VkDeviceSize>(sizeof(glm::vec4)*(44100/25));
+    descriptorBufferInfo.range = static_cast<VkDeviceSize>(sizeof(glm::vec4)*BUFFER_SIZE)*2;
 
     VkDescriptorImageInfo descriptorImageInfo{};
 
@@ -354,7 +354,7 @@ void Desu::init() {
     //Create spectrum buffer
     VkBufferCreateInfo spectrumCreateInfo{};
     spectrumCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    spectrumCreateInfo.size = static_cast<VkDeviceSize>(sizeof(glm::vec4)*(44100/25));
+    spectrumCreateInfo.size = static_cast<VkDeviceSize>(sizeof(glm::vec4)*BUFFER_SIZE)*2;
     spectrumCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 
     VmaAllocationCreateInfo spectrumAllocationCreateInfo{};
@@ -435,7 +435,7 @@ void Desu::start() {
         imageMemoryBarrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
 
         VkBufferCopy spectrumCopy{};
-        spectrumCopy.size = static_cast<VkDeviceSize>(sizeof(glm::vec4)*(44100/25));
+        spectrumCopy.size = static_cast<VkDeviceSize>(sizeof(glm::vec4)*BUFFER_SIZE)*2;
         vkCmdCopyBuffer(commandBuffers[frame], spectrumStage, spectrum, 1, &spectrumCopy);
 
         vkCmdPipelineBarrier(commandBuffers[frame], VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &imageMemoryBarrier);

@@ -5,8 +5,10 @@
 #include <portaudio.h>
 #include <fftw3.h>
 
-const int SAMPLE_RATE = 44100;
-const int BUFFER_SIZE = SAMPLE_RATE/25;
+#include <cmath>
+
+//const int SAMPLE_RATE = 44100;
+//const int BUFFER_SIZE = SAMPLE_RATE/25;
 const int NUM_CHANNELS = 2;
 
 float* fft_input;
@@ -14,13 +16,20 @@ fftwf_complex* fft_output;
 fftwf_plan fft_plan;
 
 std::vector<glm::vec4> spectrum(BUFFER_SIZE);
+std::vector<glm::vec4> length(BUFFER_SIZE);
+
+template<typename T>
+T sqr(T v) { return v*v; }
 
 int audioCallback(const void *inputBuffer, void *outputBuffer, unsigned long framesPerBuffer, const PaStreamCallbackTimeInfo *timeInfo, PaStreamCallbackFlags statusFlags, void *userData) {
     float* samples = (float*)inputBuffer;
 
     //Right channel
+    float right_sum = 0;
     for (size_t i = 0; i < BUFFER_SIZE; i++) {
         fft_input[i] = samples[i*2];
+        right_sum += std::sqrt(1+ sqr(samples[i*2+2]-samples[i*2]) );
+        length[i].x = right_sum;
     }
 
     fftwf_execute(fft_plan);
@@ -35,8 +44,11 @@ int audioCallback(const void *inputBuffer, void *outputBuffer, unsigned long fra
     }
 
     //Left channel
+    float left_sum = 0;
     for (size_t i = 0; i < BUFFER_SIZE; i++) {
         fft_input[i] = samples[i*2+1];
+        left_sum += std::sqrt(1+ sqr(samples[i*2+3]-samples[i*2+1]) );
+        length[i].y = left_sum;
     }
 
     fftwf_execute(fft_plan);
@@ -49,10 +61,11 @@ int audioCallback(const void *inputBuffer, void *outputBuffer, unsigned long fra
             spectrum[i].z = samples[i*2+1];
         }
     }
-    
+
     Desu* desu = reinterpret_cast<Desu*>(userData);
     vmaCopyMemoryToAllocation(desu->allocator, spectrum.data(), desu->spectrumStageAllocation, 0, sizeof(glm::vec4)*spectrum.size());
-    
+    vmaCopyMemoryToAllocation(desu->allocator, length.data(), desu->spectrumStageAllocation, sizeof(glm::vec4)*spectrum.size(), sizeof(glm::vec4)*length.size());
+
     return paContinue;
 }
 

@@ -61,8 +61,17 @@ void main() {
     if ((y) < lzw-6) imageStore(renderTexture, ivec2(gl_GlobalInvocationID.x, y), vec4(hue2rgb(log2(x))*log(lzw/15)+0*vec3(spectrumBuffer.spectrum[int(index)].zw, 0.42), 1.0));
 
     vec2 wav = spectrumBuffer.spectrum[int(gl_GlobalInvocationID.x/2.0)+882].xz;
-    vec2 dwav = spectrumBuffer.spectrum[int((gl_GlobalInvocationID.x+1.0)/2.0)+882].xz-wav;
+    vec2 next_wav = spectrumBuffer.spectrum[int((gl_GlobalInvocationID.x)/2.0)+882+1].xz;
+    vec2 dwav = next_wav-wav;
     float ny = 4.0*(y/912.0-0.5);
-    if(distance(ny, wav.x) < abs(dwav.x)) imageStore(renderTexture, ivec2(gl_GlobalInvocationID.x, y), vec4(0, .8, 1, 1));
-    if(distance(ny, wav.y) < abs(dwav.y)) imageStore(renderTexture, ivec2(gl_GlobalInvocationID.x, y), vec4(1, .2, 0, 1));
+
+    vec4 module = spectrumBuffer.spectrum[int(gl_GlobalInvocationID.x/2.0)+1764-1].xyzw;
+    vec4 dmodule = spectrumBuffer.spectrum[int(gl_GlobalInvocationID.x/2.0)+1764+1].xyzw;
+    bool modx = (mod(mix(module.x,dmodule.x, 1.0-distance(ny, wav.x)/distance(wav.x,next_wav.x)), 10.0) < 4.0f ? true : false);
+    bool mody = (mod(mix(module.y,dmodule.y, 1.0-distance(ny, wav.y)/distance(wav.y,next_wav.y)), 10.0) < 4.0f ? true : false);
+
+    if(abs(wav.x-ny) < abs(dwav.x)+0.005 && modx) imageStore(renderTexture, ivec2(gl_GlobalInvocationID.x, y), vec4(0, .8, 1, 1));
+    if(abs(wav.y-ny) < abs(dwav.y)+0.005 && mody) imageStore(renderTexture, ivec2(gl_GlobalInvocationID.x, y), vec4(1, .2, 0, 1));
+
+    //if(ny < dwav.x && ny > wav.x || ny > dwav.x && ny < wav.x) imageStore(renderTexture, ivec2(gl_GlobalInvocationID.x, y), vec4(0, 1, 0, 1));
 }

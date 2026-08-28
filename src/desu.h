@@ -33,6 +33,9 @@ using glm::countof;
 std::vector<char> readFile(const std::string& filename);
 VkResult createShaderModule(VkDevice device, size_t codeSize, const char* code, VkShaderModule* shaderModule);
 
+const int SAMPLE_RATE = 44100;
+const int BUFFER_SIZE = SAMPLE_RATE/25;
+
 class Desu {
 public:
     int width = 1600, height = 912;
