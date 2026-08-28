@@ -65,13 +65,16 @@ void main() {
     vec2 dwav = next_wav-wav;
     float ny = 4.0*(y/912.0-0.5);
 
-    vec4 module = spectrumBuffer.spectrum[int(gl_GlobalInvocationID.x/2.0)+1764-1].xyzw;
+    vec4 module = spectrumBuffer.spectrum[int(gl_GlobalInvocationID.x/2.0)+1764].xyzw;
     vec4 dmodule = spectrumBuffer.spectrum[int(gl_GlobalInvocationID.x/2.0)+1764+1].xyzw;
-    bool modx = (mod(mix(module.x,dmodule.x, 1.0-distance(ny, wav.x)/distance(wav.x,next_wav.x)), 10.0) < 4.0f ? true : false);
-    bool mody = (mod(mix(module.y,dmodule.y, 1.0-distance(ny, wav.y)/distance(wav.y,next_wav.y)), 10.0) < 4.0f ? true : false);
+    bool modx = (mod(mix(module.x,dmodule.x, 1.0-abs(wav.x-ny)/distance(distance(wav.x,ny),dwav.x)), 10.0) < 5.0f ? true : false);
+    bool mody = (mod(mix(module.y,dmodule.y, 1.0-abs(wav.y-ny)/distance(distance(wav.y,ny),dwav.y)), 10.0) < 5.0f ? true : false);
 
-    if(abs(wav.x-ny) < abs(dwav.x)+0.005 && modx) imageStore(renderTexture, ivec2(gl_GlobalInvocationID.x, y), vec4(0, .8, 1, 1));
-    if(abs(wav.y-ny) < abs(dwav.y)+0.005 && mody) imageStore(renderTexture, ivec2(gl_GlobalInvocationID.x, y), vec4(1, .2, 0, 1));
+    vec4 color = vec4(0,0,0,1);
+    bool drawright = abs(wav.x-ny) < abs(dwav.x)+0.005 && modx ? true : false;
+    bool drawleft = abs(wav.y-ny) < abs(dwav.y)+0.005 && mody ? true : false;
+    if(drawright) color.xyz+=vec3(0, .8, 1);
+    if(drawleft) color.xyz+=vec3(1, .2, 0);
 
-    //if(ny < dwav.x && ny > wav.x || ny > dwav.x && ny < wav.x) imageStore(renderTexture, ivec2(gl_GlobalInvocationID.x, y), vec4(0, 1, 0, 1));
+    if(drawright || drawleft) imageStore(renderTexture, ivec2(gl_GlobalInvocationID.x, y), color);
 }
