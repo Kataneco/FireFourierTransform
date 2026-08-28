@@ -1,6 +1,6 @@
 #version 460
 
-layout (local_size_x = 16, local_size_y = 16, local_size_x = 1) in;
+layout (local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 layout (set = 0, binding = 0, rgba32f) uniform image2D renderTexture;
 
 layout (std140, set = 0, binding = 1) readonly buffer SpectrumBuffer {
@@ -19,6 +19,19 @@ float key_in_octave(float frequency) {
 vec3 hue2rgb(float hue) {
     hue = fract(hue);
     return pow(vec3(abs(hue * 6.0 - 3.0) - 1.0, 2.0 - abs(hue * 6.0 - 2.0), 2.0 - abs(hue * 6.0 - 4.0)), vec3(1.0/1.0));
+}
+
+const float AMP_PX = 228.0;
+const float HALF_WIDTH = 1.6;
+const float DASH_PERIOD = 16.0;
+const float DASH_ON = 8.0;
+
+//round-capped dash SDF: phase = arc length along the curve in px, dperp = distance to the curve in px
+float dashDistance(float phase, float dperp) {
+    float m = mod(phase, DASH_PERIOD);
+    if (m > DASH_ON + (DASH_PERIOD - DASH_ON) * 0.5) m -= DASH_PERIOD;
+    float dalong = max(abs(m - DASH_ON * 0.5) - DASH_ON * 0.5, 0.0);
+    return length(vec2(dalong, dperp));
 }
 
 void main() {
@@ -60,21 +73,39 @@ void main() {
     if ((912-y) < lxy-6) imageStore(renderTexture, ivec2(gl_GlobalInvocationID.x, y), vec4(hue2rgb(log2(x))*log(lxy/15)+0*vec3(spectrumBuffer.spectrum[int(index)].xy, 0.42), 1.0));
     if ((y) < lzw-6) imageStore(renderTexture, ivec2(gl_GlobalInvocationID.x, y), vec4(hue2rgb(log2(x))*log(lzw/15)+0*vec3(spectrumBuffer.spectrum[int(index)].zw, 0.42), 1.0));
 
-    vec2 wav = spectrumBuffer.spectrum[int(gl_GlobalInvocationID.x/2.0)+882].xz;
-    vec2 next_wav = spectrumBuffer.spectrum[int((gl_GlobalInvocationID.x)/2.0)+882+1].xz;
-    vec2 dwav = next_wav-wav;
-    float ny = 4.0*(y/912.0-0.5);
+    //waveform pass: distance to the polyline in pixel space, dash phase = cumulative screen-px arc length
+    //(module buffer at 1764+ holds exclusive prefix sums uploaded by main.cpp)
+    vec2 P = vec2(float(gl_GlobalInvocationID.x), y);
+    int i = int(gl_GlobalInvocationID.x / 2u);
 
-    vec4 module = spectrumBuffer.spectrum[int(gl_GlobalInvocationID.x/2.0)+1764].xyzw;
-    vec4 dmodule = spectrumBuffer.spectrum[int(gl_GlobalInvocationID.x/2.0)+1764+1].xyzw;
-    bool modx = (mod(mix(module.x,dmodule.x, 1.0-abs(wav.x-ny)/distance(distance(wav.x,ny),dwav.x)), 10.0) < 5.0f ? true : false);
-    bool mody = (mod(mix(module.y,dmodule.y, 1.0-abs(wav.y-ny)/distance(distance(wav.y,ny),dwav.y)), 10.0) < 5.0f ? true : false);
+    float bestR = 1e9;
+    float bestL = 1e9;
+    for (int j = i - 2; j <= i + 1; ++j) {
+        int jj = clamp(j, 0, 798);
+        vec2 s0 = spectrumBuffer.spectrum[jj + 882].xz;
+        vec2 s1 = spectrumBuffer.spectrum[jj + 883].xz;
+        vec2 m0 = spectrumBuffer.spectrum[jj + 1764].xy;
+        vec2 m1 = spectrumBuffer.spectrum[jj + 1765].xy;
 
-    vec4 color = vec4(0,0,0,1);
-    bool drawright = abs(wav.x-ny) < abs(dwav.x)+0.005 && modx ? true : false;
-    bool drawleft = abs(wav.y-ny) < abs(dwav.y)+0.005 && mody ? true : false;
-    if(drawright) color.xyz+=vec3(0, .8, 1);
-    if(drawleft) color.xyz+=vec3(1, .2, 0);
+        vec2 A = vec2(2.0 * float(jj), AMP_PX * s0.x + 456.0);
+        vec2 B = vec2(2.0 * float(jj) + 2.0, AMP_PX * s1.x + 456.0);
+        vec2 AB = B - A;
+        float t = clamp(dot(P - A, AB) / dot(AB, AB), 0.0, 1.0);
+        bestR = min(bestR, dashDistance(mix(m0.x, m1.x, t), distance(P, A + AB * t)));
 
-    if(drawright || drawleft) imageStore(renderTexture, ivec2(gl_GlobalInvocationID.x, y), color);
+        A.y = AMP_PX * s0.y + 456.0;
+        B.y = AMP_PX * s1.y + 456.0;
+        AB = B - A;
+        t = clamp(dot(P - A, AB) / dot(AB, AB), 0.0, 1.0);
+        bestL = min(bestL, dashDistance(mix(m0.y, m1.y, t), distance(P, A + AB * t)));
+    }
+
+    float aR = smoothstep(HALF_WIDTH + 0.75, HALF_WIDTH - 0.75, bestR);
+    float aL = smoothstep(HALF_WIDTH + 0.75, HALF_WIDTH - 0.75, bestL);
+    if (aR + aL > 0.004) {
+        vec4 base = imageLoad(renderTexture, ivec2(gl_GlobalInvocationID.x, y));
+        vec3 col = mix(base.xyz, vec3(0.0, 0.8, 1.0), aR);
+        col = mix(col, vec3(1.0, 0.2, 0.0), aL);
+        imageStore(renderTexture, ivec2(gl_GlobalInvocationID.x, y), vec4(col, 1.0));
+    }
 }
