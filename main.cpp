@@ -25,11 +25,14 @@ int audioCallback(const void *inputBuffer, void *outputBuffer, unsigned long fra
     float* samples = (float*)inputBuffer;
 
     //Right channel
+    //dash phase: exclusive prefix arc length in screen px over the displayed frames (882+i),
+    //2 px per sample and 912/4=228 px per amplitude unit must match draw.comp
     float right_sum = 0;
     for (size_t i = 0; i < BUFFER_SIZE; i++) {
         fft_input[i] = samples[i*2];
-        right_sum += std::sqrt(1+ sqr(samples[i*2+2]-samples[i*2]) );
         length[i].x = right_sum;
+        if (i + 883 < BUFFER_SIZE)
+            right_sum += std::sqrt(sqr(2.0f) + sqr(228.0f*(samples[(i+883)*2]-samples[(i+882)*2])) );
     }
 
     fftwf_execute(fft_plan);
@@ -47,8 +50,9 @@ int audioCallback(const void *inputBuffer, void *outputBuffer, unsigned long fra
     float left_sum = 0;
     for (size_t i = 0; i < BUFFER_SIZE; i++) {
         fft_input[i] = samples[i*2+1];
-        left_sum += std::sqrt(1+ sqr(samples[i*2+3]-samples[i*2+1]) );
         length[i].y = left_sum;
+        if (i + 883 < BUFFER_SIZE)
+            left_sum += std::sqrt(sqr(2.0f) + sqr(228.0f*(samples[(i+883)*2+1]-samples[(i+882)*2+1])) );
     }
 
     fftwf_execute(fft_plan);
